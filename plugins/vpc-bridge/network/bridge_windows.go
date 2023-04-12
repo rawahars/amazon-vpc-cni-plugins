@@ -16,6 +16,7 @@ package network
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/aws/amazon-vpc-cni-plugins/network/imds"
 	"net"
 	"strings"
 
@@ -188,60 +189,68 @@ func (nb *BridgeBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 	hnsEndpoint.PrefixLength = uint8(pl)
 
 	// SNAT endpoint traffic to ENI primary IP address...
-	var snatExceptions []string
-	if nw.VPCCIDRs == nil {
-		// ...except if the destination is in the same subnet as the ENI.
-		snatExceptions = []string{vpc.GetSubnetPrefix(&nw.ENIIPAddresses[0]).String()}
-	} else {
-		// ...or, if known, the same VPC.
-		for _, cidr := range nw.VPCCIDRs {
-			snatExceptions = append(snatExceptions, cidr.String())
-		}
-	}
-	if nw.ServiceCIDR != "" {
-		// ...or the destination is a service endpoint.
-		snatExceptions = append(snatExceptions, nw.ServiceCIDR)
-	}
-
-	err = nb.addEndpointPolicy(
-		hnsEndpoint,
-		hcsshim.OutboundNatPolicy{
-			Policy: hcsshim.Policy{Type: hcsshim.OutboundNat},
-			// Implicit VIP: nw.ENIIPAddresses[0].IP.String(),
-			Exceptions: snatExceptions,
-		})
-	if err != nil {
-		log.Errorf("Failed to add endpoint SNAT policy: %v.", err)
-		return err
-	}
+	//var snatExceptions []string
+	//if nw.VPCCIDRs == nil {
+	//	// ...except if the destination is in the same subnet as the ENI.
+	//	snatExceptions = []string{vpc.GetSubnetPrefix(&nw.ENIIPAddresses[0]).String()}
+	//} else {
+	//	// ...or, if known, the same VPC.
+	//	for _, cidr := range nw.VPCCIDRs {
+	//		snatExceptions = append(snatExceptions, cidr.String())
+	//	}
+	//}
+	//if nw.ServiceCIDR != "" {
+	//	// ...or the destination is a service endpoint.
+	//	snatExceptions = append(snatExceptions, nw.ServiceCIDR)
+	//}
+	//
+	//err = nb.addEndpointPolicy(
+	//	hnsEndpoint,
+	//	hcsshim.OutboundNatPolicy{
+	//		Policy: hcsshim.Policy{Type: hcsshim.OutboundNat},
+	//		// Implicit VIP: nw.ENIIPAddresses[0].IP.String(),
+	//		Exceptions: snatExceptions,
+	//	})
+	//if err != nil {
+	//	log.Errorf("Failed to add endpoint SNAT policy: %v.", err)
+	//	return err
+	//}
 
 	// Route traffic sent to service endpoints to the host. The load balancer running
 	// in the host network namespace then forwards traffic to its final destination.
-	if nw.ServiceCIDR != "" {
-		// Set route policy for service subnet.
-		// NextHop is implicitly the host.
-		err = nb.addEndpointPolicy(
-			hnsEndpoint,
-			hnsRoutePolicy{
-				Policy:            hcsshim.Policy{Type: hcsshim.Route},
-				DestinationPrefix: nw.ServiceCIDR,
-				NeedEncap:         true,
-			})
-		if err != nil {
-			log.Errorf("Failed to add endpoint route policy for service subnet: %v.", err)
-			return err
-		}
+	//if nw.ServiceCIDR != "" {
+	//	// Set route policy for service subnet.
+	//	// NextHop is implicitly the host.
+	//	err = nb.addEndpointPolicy(
+	//		hnsEndpoint,
+	//		hnsRoutePolicy{
+	//			Policy:            hcsshim.Policy{Type: hcsshim.Route},
+	//			DestinationPrefix: nw.ServiceCIDR,
+	//			NeedEncap:         true,
+	//		})
+	//	if err != nil {
+	//		log.Errorf("Failed to add endpoint route policy for service subnet: %v.", err)
+	//		return err
+	//	}
+	//
+	//	// Set route policy for host primary IP address.
+	//	err = nb.addEndpointPolicy(
+	//		hnsEndpoint,
+	//		hnsRoutePolicy{
+	//			Policy:            hcsshim.Policy{Type: hcsshim.Route},
+	//			DestinationPrefix: nw.ENIIPAddresses[0].IP.String() + "/32",
+	//			NeedEncap:         true,
+	//		})
+	//	if err != nil {
+	//		log.Errorf("Failed to add endpoint route policy for host: %v.", err)
+	//		return err
+	//	}
+	//}
 
-		// Set route policy for host primary IP address.
-		err = nb.addEndpointPolicy(
-			hnsEndpoint,
-			hnsRoutePolicy{
-				Policy:            hcsshim.Policy{Type: hcsshim.Route},
-				DestinationPrefix: nw.ENIIPAddresses[0].IP.String() + "/32",
-				NeedEncap:         true,
-			})
+	if ep.BlockIMDS {
+		err = imds.BlockInstanceMetadataEndpoint(hnsEndpoint)
 		if err != nil {
-			log.Errorf("Failed to add endpoint route policy for host: %v.", err)
+			log.Errorf("Failed to block instance metadata endpoint: %v.", err)
 			return err
 		}
 	}

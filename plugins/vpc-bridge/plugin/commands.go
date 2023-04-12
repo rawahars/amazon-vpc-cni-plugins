@@ -85,6 +85,7 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 		IfType:      netConfig.InterfaceType,
 		TapUserID:   netConfig.TapUserID,
 		IPAddresses: netConfig.IPAddresses,
+		BlockIMDS:   netConfig.BlockIMDS,
 	}
 
 	err = nb.FindOrCreateEndpoint(&nw, &ep)

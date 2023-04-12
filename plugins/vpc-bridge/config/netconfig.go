@@ -40,6 +40,7 @@ type NetConfig struct {
 	GatewayIPAddress net.IP
 	InterfaceType    string
 	TapUserID        int
+	BlockIMDS        bool
 	Kubernetes       *KubernetesConfig
 }
 
@@ -57,6 +58,7 @@ type netConfigJSON struct {
 	InterfaceType    string   `json:"interfaceType"`
 	TapUserID        string   `json:"tapUserID"`
 	ServiceCIDR      string   `json:"serviceCIDR"`
+	BlockIMDS        bool     `json:"blockInstanceMetadata"`
 }
 
 const (
@@ -107,6 +109,7 @@ func New(args *cniSkel.CmdArgs, isAddCmd bool) (*NetConfig, error) {
 		BridgeType:      config.BridgeType,
 		BridgeNetNSPath: config.BridgeNetNSPath,
 		InterfaceType:   config.InterfaceType,
+		BlockIMDS:       config.BlockIMDS,
 	}
 
 	// Parse the ENI MAC address.

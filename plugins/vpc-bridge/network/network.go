@@ -51,4 +51,5 @@ type Endpoint struct {
 	TapUserID   int
 	MACAddress  net.HardwareAddr
 	IPAddresses []net.IPNet
+	BlockIMDS   bool
 }
