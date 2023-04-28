@@ -215,6 +215,23 @@ func (nb *BridgeBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 		return err
 	}
 
+	// Add the policies for any port mappings applicable to the endpoint.
+	for _, portMapEntry := range ep.PortMappings {
+		err = nb.addEndpointPolicy(
+			hnsEndpoint,
+			hcsshim.NatPolicy{
+				Type:                 hcsshim.Nat,
+				Protocol:             portMapEntry.Protocol,
+				InternalPort:         uint16(portMapEntry.ContainerPort),
+				ExternalPort:         uint16(portMapEntry.HostPort),
+				ExternalPortReserved: false,
+			})
+		if err != nil {
+			log.Errorf("Failed to add endpoint port mapping policy: %v.", err)
+			return err
+		}
+	}
+
 	// Route traffic sent to service endpoints to the host. The load balancer running
 	// in the host network namespace then forwards traffic to its final destination.
 	if nw.ServiceCIDR != "" {
