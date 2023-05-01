@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/aws/amazon-vpc-cni-plugins/network/imds"
+	"github.com/aws/amazon-vpc-cni-plugins/plugins/vpc-bridge/config"
 	"net"
 	"strings"
 
@@ -183,10 +184,30 @@ func (nb *BridgeBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 		DNSServerList:      strings.Join(nw.DNSServers, ","),
 	}
 
-	// Set the endpoint IP address.
-	hnsEndpoint.IPAddress = ep.IPAddresses[0].IP
-	pl, _ := ep.IPAddresses[0].Mask.Size()
-	hnsEndpoint.PrefixLength = uint8(pl)
+	if nw.NetworkType == config.NetworkTypeBridge {
+		// Set the endpoint IP address.
+		hnsEndpoint.IPAddress = ep.IPAddresses[0].IP
+		pl, _ := ep.IPAddresses[0].Mask.Size()
+		hnsEndpoint.PrefixLength = uint8(pl)
+	}
+
+	if nw.NetworkType == config.NetworkTypeNAT {
+		for _, portMap := range ep.PortMappings {
+			err = nb.addEndpointPolicy(
+				hnsEndpoint,
+				hcsshim.NatPolicy{
+					Type:                 "NAT",
+					Protocol:             portMap.Protocol,
+					InternalPort:         uint16(portMap.ContainerPort),
+					ExternalPort:         uint16(portMap.HostPort),
+					ExternalPortReserved: false,
+				})
+			if err != nil {
+				log.Errorf("Failed to add endpoint route policy for host: %v.", err)
+				return err
+			}
+		}
+	}
 
 	// SNAT endpoint traffic to ENI primary IP address...
 	//var snatExceptions []string
@@ -455,6 +476,10 @@ func (nb *BridgeBuilder) checkHNSVersion() error {
 
 // generateHNSNetworkName generates a deterministic unique name for an HNS network.
 func (nb *BridgeBuilder) generateHNSNetworkName(nw *Network) string {
+	if nw.NetworkType == config.NetworkTypeNAT {
+		return nw.Name
+	}
+
 	// Use the MAC address of the shared ENI as the deterministic unique identifier.
 	id := strings.Replace(nw.SharedENI.GetMACAddress().String(), ":", "", -1)
 	return fmt.Sprintf(hnsNetworkNameFormat, nw.Name, id)

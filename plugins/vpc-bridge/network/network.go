@@ -14,6 +14,7 @@
 package network
 
 import (
+	"github.com/aws/amazon-vpc-cni-plugins/plugins/vpc-bridge/config"
 	"net"
 
 	"github.com/aws/amazon-vpc-cni-plugins/network/eni"
@@ -30,6 +31,8 @@ type Builder interface {
 // Network represents a container network.
 type Network struct {
 	Name                string
+	NetworkType         string
+	NetworkSubnet       net.IPNet
 	BridgeType          string
 	BridgeNetNSPath     string
 	BridgeIndex         int
@@ -44,12 +47,13 @@ type Network struct {
 
 // Endpoint represents a container network interface.
 type Endpoint struct {
-	ContainerID string
-	NetNSName   string
-	IfName      string
-	IfType      string
-	TapUserID   int
-	MACAddress  net.HardwareAddr
-	IPAddresses []net.IPNet
-	BlockIMDS   bool
+	ContainerID  string
+	NetNSName    string
+	IfName       string
+	IfType       string
+	TapUserID    int
+	MACAddress   net.HardwareAddr
+	IPAddresses  []net.IPNet
+	BlockIMDS    bool
+	PortMappings []config.PortMappingEntry
 }

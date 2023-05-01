@@ -41,30 +41,45 @@ type NetConfig struct {
 	InterfaceType    string
 	TapUserID        int
 	BlockIMDS        bool
+	NetworkType      string
+	NetworkSubnet    net.IPNet
+	PortMappings     []PortMappingEntry
 	Kubernetes       *KubernetesConfig
 }
 
 // netConfigJSON defines the network configuration JSON file format for the vpc-bridge plugin.
 type netConfigJSON struct {
 	cniTypes.NetConf
-	ENIName          string   `json:"eniName"`
-	ENIMACAddress    string   `json:"eniMACAddress"`
-	ENIIPAddresses   []string `json:"eniIPAddresses"`
-	VPCCIDRs         []string `json:"vpcCIDRs"`
-	BridgeType       string   `json:"bridgeType"`
-	BridgeNetNSPath  string   `json:"bridgeNetNSPath"`
-	IPAddresses      []string `json:"ipAddresses"`
-	GatewayIPAddress string   `json:"gatewayIPAddress"`
-	InterfaceType    string   `json:"interfaceType"`
-	TapUserID        string   `json:"tapUserID"`
-	ServiceCIDR      string   `json:"serviceCIDR"`
-	BlockIMDS        bool     `json:"blockInstanceMetadata"`
+	NetworkType      string             `json:"networkType"`
+	NetworkSubnet    string             `json:"networkSubnet"`
+	PortMappings     []PortMappingEntry `json:"portMappings"`
+	ENIName          string             `json:"eniName"`
+	ENIMACAddress    string             `json:"eniMACAddress"`
+	ENIIPAddresses   []string           `json:"eniIPAddresses"`
+	VPCCIDRs         []string           `json:"vpcCIDRs"`
+	BridgeType       string             `json:"bridgeType"`
+	BridgeNetNSPath  string             `json:"bridgeNetNSPath"`
+	IPAddresses      []string           `json:"ipAddresses"`
+	GatewayIPAddress string             `json:"gatewayIPAddress"`
+	InterfaceType    string             `json:"interfaceType"`
+	TapUserID        string             `json:"tapUserID"`
+	ServiceCIDR      string             `json:"serviceCIDR"`
+	BlockIMDS        bool               `json:"blockInstanceMetadata"`
+}
+
+type PortMappingEntry struct {
+	Protocol      string `json:"protocol"`
+	ContainerPort int    `json:"containerPort"`
+	HostPort      int    `json:"hostPort"`
 }
 
 const (
 	// Bridge network namespace defaults to the host network namespace (empty string),
 	// or more precisely, whichever namespace the CNI plugin is running in.
 	defaultBridgeNetNSPath = ""
+
+	NetworkTypeBridge = "Bridge"
+	NetworkTypeNAT    = "NAT"
 
 	// Bridge type values.
 	BridgeTypeL2 = "L2"
@@ -85,7 +100,15 @@ func New(args *cniSkel.CmdArgs, isAddCmd bool) (*NetConfig, error) {
 	}
 
 	// Validate if all the required fields are present.
-	if config.ENIName == "" && config.ENIMACAddress == "" {
+	if config.NetworkType == "" {
+		config.NetworkType = NetworkTypeBridge
+	}
+
+	if config.NetworkType != NetworkTypeBridge && config.NetworkType != NetworkTypeNAT {
+		return nil, fmt.Errorf("only bridge or nat mode are supported")
+	}
+
+	if config.ENIName == "" && config.ENIMACAddress == "" && config.NetworkType == NetworkTypeBridge {
 		return nil, fmt.Errorf("missing required parameter ENIName or ENIMACAddress")
 	}
 
@@ -112,78 +135,90 @@ func New(args *cniSkel.CmdArgs, isAddCmd bool) (*NetConfig, error) {
 		BlockIMDS:       config.BlockIMDS,
 	}
 
-	// Parse the ENI MAC address.
-	if config.ENIMACAddress != "" {
-		netConfig.ENIMACAddress, err = net.ParseMAC(config.ENIMACAddress)
+	if config.NetworkType == NetworkTypeNAT {
+		_, ipnet, err := net.ParseCIDR(config.NetworkSubnet)
 		if err != nil {
-			return nil, fmt.Errorf("invalid ENIMACAddress %s", config.ENIMACAddress)
+			return nil, fmt.Errorf("failed to parse the network subnet: %w", err)
 		}
+		netConfig.NetworkSubnet = *ipnet
+
+		netConfig.PortMappings = config.PortMappings
 	}
 
-	// Parse the optional ENI IP addresses.
-	for _, eniIPString := range config.ENIIPAddresses {
-		eniIP, err := vpc.GetIPAddressFromString(eniIPString)
-		if err != nil {
-			return nil, fmt.Errorf("invalid ENIIPAddress %s", eniIPString)
-		}
-		netConfig.ENIIPAddresses = append(netConfig.ENIIPAddresses, *eniIP)
-	}
-
-	// Parse the optional VPC CIDR blocks.
-	if config.VPCCIDRs != nil {
-		for _, cidrString := range config.VPCCIDRs {
-			_, cidr, err := net.ParseCIDR(cidrString)
+	if config.NetworkType == NetworkTypeBridge {
+		// Parse the ENI MAC address.
+		if config.ENIMACAddress != "" {
+			netConfig.ENIMACAddress, err = net.ParseMAC(config.ENIMACAddress)
 			if err != nil {
-				return nil, fmt.Errorf("invalid VPCCIDR %s", cidrString)
+				return nil, fmt.Errorf("invalid ENIMACAddress %s", config.ENIMACAddress)
 			}
-			netConfig.VPCCIDRs = append(netConfig.VPCCIDRs, *cidr)
-		}
-	}
-
-	// Parse the bridge type.
-	if config.BridgeType != BridgeTypeL2 && config.BridgeType != BridgeTypeL3 {
-		return nil, fmt.Errorf("invalid BridgeType %s", config.BridgeType)
-	}
-
-	// Parse the optional IP addresses.
-	for _, ipString := range config.IPAddresses {
-		ipAddress, err := vpc.GetIPAddressFromString(ipString)
-		if err != nil {
-			return nil, fmt.Errorf("invalid IPAddress %s", ipString)
-		}
-		netConfig.IPAddresses = append(netConfig.IPAddresses, *ipAddress)
-	}
-
-	// Parse the optional gateway IP address.
-	if config.GatewayIPAddress != "" {
-		netConfig.GatewayIPAddress = net.ParseIP(config.GatewayIPAddress)
-		if netConfig.GatewayIPAddress == nil {
-			return nil, fmt.Errorf("invalid GatewayIPAddress %s", config.GatewayIPAddress)
-		}
-	}
-
-	// Parse the interface type.
-	if config.InterfaceType != IfTypeVETH && config.InterfaceType != IfTypeTAP {
-		return nil, fmt.Errorf("invalid InterfaceType %s", config.InterfaceType)
-	}
-
-	// Parse the optional TAP user ID.
-	if config.TapUserID != "" {
-		netConfig.TapUserID, err = strconv.Atoi(config.TapUserID)
-		if err != nil {
-			return nil, fmt.Errorf("invalid TapUserID %s", config.TapUserID)
-		}
-	}
-
-	// Parse orchestrator-specific configuration.
-	if strings.Contains(args.Args, "K8S") {
-		netConfig.Kubernetes = &KubernetesConfig{
-			ServiceCIDR: config.ServiceCIDR,
 		}
 
-		err = parseKubernetesArgs(&netConfig, args, isAddCmd)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse Kubernetes args: %v", err)
+		// Parse the optional ENI IP addresses.
+		for _, eniIPString := range config.ENIIPAddresses {
+			eniIP, err := vpc.GetIPAddressFromString(eniIPString)
+			if err != nil {
+				return nil, fmt.Errorf("invalid ENIIPAddress %s", eniIPString)
+			}
+			netConfig.ENIIPAddresses = append(netConfig.ENIIPAddresses, *eniIP)
+		}
+
+		// Parse the optional VPC CIDR blocks.
+		if config.VPCCIDRs != nil {
+			for _, cidrString := range config.VPCCIDRs {
+				_, cidr, err := net.ParseCIDR(cidrString)
+				if err != nil {
+					return nil, fmt.Errorf("invalid VPCCIDR %s", cidrString)
+				}
+				netConfig.VPCCIDRs = append(netConfig.VPCCIDRs, *cidr)
+			}
+		}
+
+		// Parse the bridge type.
+		if config.BridgeType != BridgeTypeL2 && config.BridgeType != BridgeTypeL3 {
+			return nil, fmt.Errorf("invalid BridgeType %s", config.BridgeType)
+		}
+
+		// Parse the optional IP addresses.
+		for _, ipString := range config.IPAddresses {
+			ipAddress, err := vpc.GetIPAddressFromString(ipString)
+			if err != nil {
+				return nil, fmt.Errorf("invalid IPAddress %s", ipString)
+			}
+			netConfig.IPAddresses = append(netConfig.IPAddresses, *ipAddress)
+		}
+
+		// Parse the optional gateway IP address.
+		if config.GatewayIPAddress != "" {
+			netConfig.GatewayIPAddress = net.ParseIP(config.GatewayIPAddress)
+			if netConfig.GatewayIPAddress == nil {
+				return nil, fmt.Errorf("invalid GatewayIPAddress %s", config.GatewayIPAddress)
+			}
+		}
+
+		// Parse the interface type.
+		if config.InterfaceType != IfTypeVETH && config.InterfaceType != IfTypeTAP {
+			return nil, fmt.Errorf("invalid InterfaceType %s", config.InterfaceType)
+		}
+
+		// Parse the optional TAP user ID.
+		if config.TapUserID != "" {
+			netConfig.TapUserID, err = strconv.Atoi(config.TapUserID)
+			if err != nil {
+				return nil, fmt.Errorf("invalid TapUserID %s", config.TapUserID)
+			}
+		}
+
+		// Parse orchestrator-specific configuration.
+		if strings.Contains(args.Args, "K8S") {
+			netConfig.Kubernetes = &KubernetesConfig{
+				ServiceCIDR: config.ServiceCIDR,
+			}
+
+			err = parseKubernetesArgs(&netConfig, args, isAddCmd)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse Kubernetes args: %v", err)
+			}
 		}
 	}
 

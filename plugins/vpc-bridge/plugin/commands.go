@@ -56,6 +56,8 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 	// Find or create the container network for the shared ENI.
 	nw := network.Network{
 		Name:                netConfig.Name,
+		NetworkType:         netConfig.NetworkType,
+		NetworkSubnet:       netConfig.NetworkSubnet,
 		BridgeType:          netConfig.BridgeType,
 		BridgeNetNSPath:     netConfig.BridgeNetNSPath,
 		SharedENI:           sharedENI,
@@ -79,13 +81,14 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 
 	// Find or create the container endpoint on the network.
 	ep := network.Endpoint{
-		ContainerID: args.ContainerID,
-		NetNSName:   args.Netns,
-		IfName:      args.IfName,
-		IfType:      netConfig.InterfaceType,
-		TapUserID:   netConfig.TapUserID,
-		IPAddresses: netConfig.IPAddresses,
-		BlockIMDS:   netConfig.BlockIMDS,
+		ContainerID:  args.ContainerID,
+		NetNSName:    args.Netns,
+		IfName:       args.IfName,
+		IfType:       netConfig.InterfaceType,
+		TapUserID:    netConfig.TapUserID,
+		IPAddresses:  netConfig.IPAddresses,
+		BlockIMDS:    netConfig.BlockIMDS,
+		PortMappings: netConfig.PortMappings,
 	}
 
 	err = nb.FindOrCreateEndpoint(&nw, &ep)
