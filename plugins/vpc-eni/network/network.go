@@ -14,6 +14,7 @@
 package network
 
 import (
+	"github.com/aws/amazon-vpc-cni-plugins/plugins/vpc-eni/config"
 	"net"
 
 	"github.com/aws/amazon-vpc-cni-plugins/network/eni"
@@ -40,9 +41,10 @@ type Network struct {
 
 // Endpoint represents a container network interface.
 type Endpoint struct {
-	ContainerID string
-	NetNSName   string
-	MACAddress  net.HardwareAddr
-	IPAddresses []net.IPNet
-	BlockIMDS   bool
+	ContainerID  string
+	NetNSName    string
+	MACAddress   net.HardwareAddr
+	IPAddresses  []net.IPNet
+	BlockIMDS    bool
+	PortMappings []config.PortMappingEntry
 }

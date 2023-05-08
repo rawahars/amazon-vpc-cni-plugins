@@ -34,17 +34,25 @@ type NetConfig struct {
 	GatewayIPAddresses []net.IP
 	UseExistingNetwork bool
 	BlockIMDS          bool
+	PortMappings       []PortMappingEntry
 }
 
 // netConfigJSON defines the network configuration JSON file format for the vpc-eni plugin.
 type netConfigJSON struct {
 	cniTypes.NetConf
-	ENIName            string   `json:"eniName"`
-	ENIMACAddress      string   `json:"eniMACAddress"`
-	ENIIPAddresses     []string `json:"eniIPAddresses"`
-	GatewayIPAddresses []string `json:"gatewayIPAddresses"`
-	UseExistingNetwork bool     `json:"useExistingNetwork"`
-	BlockIMDS          bool     `json:"blockInstanceMetadata"`
+	ENIName            string             `json:"eniName"`
+	ENIMACAddress      string             `json:"eniMACAddress"`
+	ENIIPAddresses     []string           `json:"eniIPAddresses"`
+	GatewayIPAddresses []string           `json:"gatewayIPAddresses"`
+	UseExistingNetwork bool               `json:"useExistingNetwork"`
+	BlockIMDS          bool               `json:"blockInstanceMetadata"`
+	PortMappings       []PortMappingEntry `json:"portMappings"`
+}
+
+type PortMappingEntry struct {
+	Protocol      string `json:"protocol"`
+	ContainerPort int    `json:"containerPort"`
+	HostPort      int    `json:"hostPort"`
 }
 
 // New creates a new NetConfig object by parsing the given CNI arguments.
@@ -75,12 +83,21 @@ func New(args *cniSkel.CmdArgs) (*NetConfig, error) {
 		}
 	}
 
+	if config.Name == "nat" {
+		config.PortMappings = []PortMappingEntry{{
+			Protocol:      "TCP",
+			ContainerPort: 80,
+			HostPort:      8085,
+		}}
+	}
+
 	// Parse the received config into NetConfig.
 	netConfig := NetConfig{
 		NetConf:            config.NetConf,
 		ENIName:            config.ENIName,
 		UseExistingNetwork: config.UseExistingNetwork,
 		BlockIMDS:          config.BlockIMDS,
+		PortMappings:       config.PortMappings,
 	}
 
 	// Parse the ENI MAC address.

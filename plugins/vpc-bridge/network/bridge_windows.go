@@ -143,7 +143,7 @@ func (nb *BridgeBuilder) DeleteNetwork(nw *Network) error {
 // FindOrCreateEndpoint creates a new HNS endpoint in the network.
 func (nb *BridgeBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 	// This plugin does not yet support IPv6, or multiple IPv4 addresses.
-	if len(ep.IPAddresses) > 1 || ep.IPAddresses[0].IP.To4() == nil {
+	if len(ep.IPAddresses) == 1 && (len(ep.IPAddresses) > 1 || ep.IPAddresses[0].IP.To4() == nil) {
 		return fmt.Errorf("Only a single IPv4 address per endpoint is supported on Windows")
 	}
 
@@ -180,8 +180,15 @@ func (nb *BridgeBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 	hnsEndpoint = &hcsshim.HNSEndpoint{
 		Name:               endpointName,
 		VirtualNetworkName: nb.generateHNSNetworkName(nw),
-		DNSSuffix:          strings.Join(nw.DNSSuffixSearchList, ","),
-		DNSServerList:      strings.Join(nw.DNSServers, ","),
+	}
+
+	nw.DNSServers = []string{"10.0.0.2"}
+	if nw.DNSServers != nil {
+		hnsEndpoint.DNSServerList = strings.Join(nw.DNSServers, ",")
+	}
+
+	if nw.DNSSuffixSearchList != nil {
+		hnsEndpoint.DNSSuffix = strings.Join(nw.DNSSuffixSearchList, ",")
 	}
 
 	if nw.NetworkType == config.NetworkTypeBridge {

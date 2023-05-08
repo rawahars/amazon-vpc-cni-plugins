@@ -128,6 +128,7 @@ func New(args *cniSkel.CmdArgs, isAddCmd bool) (*NetConfig, error) {
 	// Populate NetConfig.
 	netConfig := NetConfig{
 		NetConf:         config.NetConf,
+		NetworkType:     config.NetworkType,
 		ENIName:         config.ENIName,
 		BridgeType:      config.BridgeType,
 		BridgeNetNSPath: config.BridgeNetNSPath,

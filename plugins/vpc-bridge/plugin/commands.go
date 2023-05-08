@@ -14,7 +14,6 @@
 package plugin
 
 import (
-	"github.com/aws/amazon-vpc-cni-plugins/network/eni"
 	"github.com/aws/amazon-vpc-cni-plugins/plugins/vpc-bridge/config"
 	"github.com/aws/amazon-vpc-cni-plugins/plugins/vpc-bridge/network"
 
@@ -37,18 +36,18 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 		netConfig, args.ContainerID, args.Netns, args.IfName, args.Args)
 
 	// Find the ENI.
-	sharedENI, err := eni.NewENI(netConfig.ENIName, netConfig.ENIMACAddress)
-	if err != nil {
-		log.Errorf("Failed to find ENI %s: %v.", netConfig.ENIName, err)
-		return err
-	}
-
-	// Find the ENI link.
-	err = sharedENI.AttachToLink()
-	if err != nil {
-		log.Errorf("Failed to find ENI link: %v.", err)
-		return err
-	}
+	//sharedENI, err := eni.NewENI(netConfig.ENIName, netConfig.ENIMACAddress)
+	//if err != nil {
+	//	log.Errorf("Failed to find ENI %s: %v.", netConfig.ENIName, err)
+	//	return err
+	//}
+	//
+	//// Find the ENI link.
+	//err = sharedENI.AttachToLink()
+	//if err != nil {
+	//	log.Errorf("Failed to find ENI link: %v.", err)
+	//	return err
+	//}
 
 	// Call the operating system specific network builder.
 	nb := plugin.nb
@@ -60,7 +59,7 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 		NetworkSubnet:       netConfig.NetworkSubnet,
 		BridgeType:          netConfig.BridgeType,
 		BridgeNetNSPath:     netConfig.BridgeNetNSPath,
-		SharedENI:           sharedENI,
+		SharedENI:           nil,
 		ENIIPAddresses:      netConfig.ENIIPAddresses,
 		GatewayIPAddress:    netConfig.GatewayIPAddress,
 		VPCCIDRs:            netConfig.VPCCIDRs,
@@ -156,18 +155,18 @@ func (plugin *Plugin) Del(args *cniSkel.CmdArgs) error {
 		netConfig, args.ContainerID, args.Netns, args.IfName, args.Args)
 
 	// Find the ENI.
-	sharedENI, err := eni.NewENI(netConfig.ENIName, netConfig.ENIMACAddress)
-	if err != nil {
-		log.Errorf("Failed to find ENI %s: %v.", netConfig.ENIName, err)
-		return err
-	}
-
-	// Find the ENI link.
-	err = sharedENI.AttachToLink()
-	if err != nil {
-		log.Errorf("Failed to find ENI link: %v.", err)
-		return err
-	}
+	//sharedENI, err := eni.NewENI(netConfig.ENIName, netConfig.ENIMACAddress)
+	//if err != nil {
+	//	log.Errorf("Failed to find ENI %s: %v.", netConfig.ENIName, err)
+	//	return err
+	//}
+	//
+	//// Find the ENI link.
+	//err = sharedENI.AttachToLink()
+	//if err != nil {
+	//	log.Errorf("Failed to find ENI link: %v.", err)
+	//	return err
+	//}
 
 	// Call operating system specific handler.
 	nb := plugin.nb
@@ -176,7 +175,7 @@ func (plugin *Plugin) Del(args *cniSkel.CmdArgs) error {
 		Name:            netConfig.Name,
 		BridgeType:      netConfig.BridgeType,
 		BridgeNetNSPath: netConfig.BridgeNetNSPath,
-		SharedENI:       sharedENI,
+		SharedENI:       nil,
 	}
 
 	ep := network.Endpoint{

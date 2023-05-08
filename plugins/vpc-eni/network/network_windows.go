@@ -14,6 +14,7 @@
 package network
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"os/exec"
@@ -208,6 +209,22 @@ func (nb *NetBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 		}
 	}
 
+	for _, portMap := range ep.PortMappings {
+		err = nb.addEndpointPolicy(
+			hnsEndpoint,
+			hcsshim.NatPolicy{
+				Type:                 "NAT",
+				Protocol:             portMap.Protocol,
+				InternalPort:         uint16(portMap.ContainerPort),
+				ExternalPort:         uint16(portMap.HostPort),
+				ExternalPortReserved: false,
+			})
+		if err != nil {
+			log.Errorf("Failed to add endpoint route policy for host: %v.", err)
+			return err
+		}
+	}
+
 	// Create the HNS endpoint.
 	log.Infof("Creating HNS endpoint: %+v", hnsEndpoint)
 	hnsResponse, err := hnsEndpoint.Create()
@@ -288,6 +305,19 @@ func (nb *NetBuilder) DeleteEndpoint(nw *Network, ep *Endpoint) error {
 	}
 
 	return err
+}
+
+// addEndpointPolicy adds a policy to an HNS endpoint.
+func (nb *NetBuilder) addEndpointPolicy(ep *hcsshim.HNSEndpoint, policy interface{}) error {
+	buf, err := json.Marshal(policy)
+	if err != nil {
+		log.Errorf("Failed to encode policy: %v.", err)
+		return err
+	}
+
+	ep.Policies = append(ep.Policies, buf)
+
+	return nil
 }
 
 // attachEndpointV1 attaches an HNS endpoint to a container's network namespace using HNS V1 APIs.
