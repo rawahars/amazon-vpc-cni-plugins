@@ -21,7 +21,7 @@ import (
 	log "github.com/cihub/seelog"
 	cniSkel "github.com/containernetworking/cni/pkg/skel"
 	cniTypes "github.com/containernetworking/cni/pkg/types"
-	cniTypesCurrent "github.com/containernetworking/cni/pkg/types/current"
+	cniTypesCurrent "github.com/containernetworking/cni/pkg/types/100"
 )
 
 // Add is the CNI ADD command handler.
@@ -79,12 +79,13 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 
 	// Find or create the container endpoint on the network.
 	ep := network.Endpoint{
-		ContainerID: args.ContainerID,
-		NetNSName:   args.Netns,
-		IfName:      args.IfName,
-		IfType:      netConfig.InterfaceType,
-		TapUserID:   netConfig.TapUserID,
-		IPAddresses: netConfig.IPAddresses,
+		ContainerID:  args.ContainerID,
+		NetNSName:    args.Netns,
+		IfName:       args.IfName,
+		IfType:       netConfig.InterfaceType,
+		TapUserID:    netConfig.TapUserID,
+		IPAddresses:  netConfig.IPAddresses,
+		PortMappings: netConfig.PortMappings,
 	}
 
 	err = nb.FindOrCreateEndpoint(&nw, &ep)
@@ -112,11 +113,8 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 		}
 
 		if ipAddr.IP.To4() != nil {
-			ipCfg.Version = "4"
 			ipCfg.Gateway = netConfig.GatewayIPAddress
 		} else {
-			ipCfg.Version = "6"
-
 			// Kubernetes doesn't implement dual-stack behavior properly. It defaults to IPv4 if
 			// both an IPv4 and IPv6 address are present. Work around that by reporting only the
 			// first IPv6 address in dual-stack setups.
